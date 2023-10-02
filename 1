@@ -1,0 +1,109 @@
+import random
+import telegram
+from telegram import Update
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, ConversationHandler, CallbackContext
+
+# Определение состояний для ConversationHandler
+START, DEAL, HIT, STAND, END = range(5)
+
+# Инициализация колоды и рук игрока и дилера
+deck = []
+player_hand = []
+dealer_hand = []
+
+def start(update: Update, context: CallbackContext) -> int:
+    global deck, player_hand, dealer_hand
+    deck = get_deck()  # Получение новой колоды
+    player_hand = deal_initial_hand()  # Раздача начальных карт игроку
+    dealer_hand = deal_initial_hand()  # Раздача начальных карт дилеру
+
+    # Отправка приветственного сообщения и начальных карт игрока
+    update.message.reply_text("Добро пожаловать в игру BlackJack!\n\nВаша рука: {}\n\nВведите /deal, чтобы начать игру.".format(player_hand))
+    return DEAL  # Переход к состоянию DEAL
+
+def deal(update: Update, context: CallbackContext) -> int:
+    # Отправка сообщения о начале игры и начальных картах игрока
+    update.message.reply_text("Вы сделали ставку и получили начальные карты.\n\nВаша рука: {}\n\nВведите /hit, чтобы взять еще карту, или /stand, чтобы закончить ход.".format(player_hand))
+    return HIT  # Переход к состоянию HIT
+
+def hit(update: Update, context: CallbackContext) -> int:
+    card = draw_card()  # Выбор случайной карты из колоды
+    player_hand.append(card)  # Добавление карты к руке игрока
+    # Отправка сообщения о взятии карты и текущей руке игрока
+    update.message.reply_text("Вы взяли карту {}.\n\nВаша рука: {}".format(card, player_hand))
+
+    if calculate_hand_value(player_hand) > 21:
+        update.message.reply_text("Вы перебрали! Вы проиграли.")
+        return END  # Переход к состоянию END (конец игры)
+
+    return HIT  # Переход к состоянию HIT
+
+def stand(update: Update, context: CallbackContext) -> int:
+    while calculate_hand_value(dealer_hand) < 17:
+        card = draw_card()
+        dealer_hand.append(card)
+
+    update.message.reply_text("Дилер завершил свой ход. Рука дилера: {}".format(dealer_hand))
+
+    player_value = calculate_hand_value(player_hand)
+    dealer_value = calculate_hand_value(dealer_hand)
+
+    if dealer_value > 21 or player_value > dealer_value:
+        update.message.reply_text("Вы выиграли!")
+    elif dealer_value > player_value:
+        update.message.reply_text("Дилер выиграл.")
+    else:
+        update.message.reply_text("Ничья!")
+
+    return END  # Переход к состоянию END
+
+def calculate_hand_value(hand):
+    value = 0
+    num_aces = 0
+
+    for card in hand:
+        if card in ['K', 'Q', 'J']:
+            value += 10
+        elif card == 'A':
+            num_aces += 1
+            value += 11
+        else:
+            value += int(card)
+
+    while num_aces > 0 and value > 21:
+        value -= 10
+        num_aces -= 1
+
+    return value
+
+def get_deck():
+    return ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'] * 4
+
+def deal_initial_hand():
+    return [draw_card(), draw_card()]
+
+def draw_card():
+    return random.choice(deck)
+
+def main():
+    updater = Updater(token='YOUR_BOT_TOKEN', use_context=True)
+    dispatcher = updater.dispatcher
+
+    conv_handler = ConversationHandler(
+        entry_points=[CommandHandler('start', start)],
+        states={
+            DEAL: [CommandHandler('deal', deal)],
+            HIT: [CommandHandler('hit', hit)],
+            STAND: [CommandHandler('stand', stand)]
+        },
+        fallbacks=[]
+    )
+
+    dispatcher.add_handler(conv_handler)
+
+    updater.start_polling()
+    updater.idle()
+
+if name == 'main':
+    main()
+Пожалуйста, замените 'YOUR_BOT_TOKEN' на токен вашего Telegram-бота для корректной работы.
